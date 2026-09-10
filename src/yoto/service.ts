@@ -68,8 +68,10 @@ export class YotoService {
         return
       }
 
+      let cardInserted = false
       if (playback.cardId) {
         const previousCard = lastCardByDevice.get(deviceId)
+        cardInserted = previousCard !== playback.cardId
         if (previousCard && previousCard !== playback.cardId) {
           this.skipEngine.resetSession(deviceId, previousCard)
         }
@@ -86,10 +88,13 @@ export class YotoService {
         trackKey: playback.trackKey ?? '',
         trackTitle: playback.trackTitle ?? undefined,
         playbackStatus: playback.playbackStatus ?? 'stopped',
-        source: playback.source ?? undefined
+        source: playback.source ?? undefined,
+        cardInserted
       }
 
-      void this.skipEngine.handlePlayback(event)
+      void this.skipEngine.handlePlayback(event).catch((error) => {
+        console.error(`[skip-engine] Failed to handle playback on ${deviceId}:`, error)
+      })
     })
 
     await this.account.start()
@@ -181,11 +186,19 @@ export class YotoService {
     if (!device) {
       throw new Error(`Device ${deviceId} not found`)
     }
+    if (!device.mqttConnected) {
+      throw new Error(`Device ${deviceId} is not connected via MQTT`)
+    }
+
+    console.log(
+      `[yoto] startCard ${action.cardId} ${action.chapterKey}/${action.trackKey} on ${deviceId}`
+    )
 
     await device.startCard({
       cardId: action.cardId,
       chapterKey: action.chapterKey,
-      trackKey: action.trackKey
+      trackKey: action.trackKey,
+      secondsIn: 0
     })
 
     const content = getDb().getCachedCard(action.cardId)
@@ -216,13 +229,14 @@ export const yotoService = new YotoService()
 
 export function createSkipEngine(): SkipEngine {
   return new SkipEngine(getDb(), {
-    getCardContent: async (cardId) => {
+    getCardContent: async (cardId, force = false) => {
       const cached = getDb().getCachedCard(cardId)
-      if (cached) return cached
+      if (cached && !force && cached.chapters.length > 0) return cached
       try {
-        return await yotoService.getCardContent(cardId)
-      } catch {
-        return null
+        return await yotoService.getCardContent(cardId, force)
+      } catch (error) {
+        console.warn(`[skip-engine] Failed to fetch content for ${cardId}:`, error)
+        return cached ?? null
       }
     },
     onSkip: async (deviceId, action) => {

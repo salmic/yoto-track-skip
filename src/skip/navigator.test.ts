@@ -4,6 +4,8 @@ import {
   findFirstAllowedTrack,
   findNextAllowedTrack,
   flattenTracks,
+  isPlaybackTrackSkipped,
+  resolvePlaybackTrack,
   shouldSkipTrack
 } from './navigator.js'
 
@@ -55,5 +57,22 @@ describe('navigator', () => {
   it('detects skipped tracks', () => {
     expect(shouldSkipTrack('t1', new Set(['t1']))).toBe(true)
     expect(shouldSkipTrack('t2', new Set(['t1']))).toBe(false)
+  })
+
+  it('resolves playback tracks by title when keys differ', () => {
+    const resolved = resolvePlaybackTrack(sampleContent, {
+      trackKey: 'wrong-key',
+      trackTitle: 'Theme Song'
+    })
+    expect(resolved?.trackKey).toBe('t1')
+  })
+
+  it('detects skipped tracks from playback title', () => {
+    expect(
+      isPlaybackTrackSkipped(sampleContent, new Set(['t1']), {
+        trackKey: 'device-key',
+        trackTitle: 'Theme Song'
+      })
+    ).toBe(true)
   })
 })

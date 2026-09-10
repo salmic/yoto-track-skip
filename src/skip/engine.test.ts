@@ -87,6 +87,36 @@ describe('SkipEngine', () => {
     expect(onSkip).not.toHaveBeenCalled()
   })
 
+  it('skips when playback track key differs but title matches configured track', async () => {
+    const db = createTestDb()
+    db.upsertProfile({
+      cardId: 'abc123',
+      cardTitle: 'Sample Story',
+      skipTrackKeys: ['t1'],
+      enabled: true
+    })
+
+    const onSkip = vi.fn(async () => {})
+    const engine = new SkipEngine(db, {
+      getCardContent: async () => sampleContent,
+      onSkip
+    })
+
+    await engine.handlePlayback(
+      createEvent({
+        trackKey: 'device-track-id',
+        trackTitle: 'Theme Song',
+        source: 'card'
+      })
+    )
+
+    expect(onSkip).toHaveBeenCalledOnce()
+    expect(onSkip.mock.calls[0]![1]).toMatchObject({
+      skippedTrackKey: 't1',
+      trackKey: 't2'
+    })
+  })
+
   it('debounces duplicate track events', async () => {
     const db = createTestDb()
     db.upsertProfile({

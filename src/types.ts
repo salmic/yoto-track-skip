@@ -79,6 +79,7 @@ export interface PlaybackEvent {
   playbackStatus: string
   source?: string
   eventUtc?: number
+  cardInserted?: boolean
 }
 
 export interface PendingAuthSession {
