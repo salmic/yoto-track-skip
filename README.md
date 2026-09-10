@@ -40,10 +40,32 @@ Open http://localhost:3847 (or http://localhost:5173 during frontend dev), conne
 
 ## How it works
 
-1. You sign in with Yoto OAuth (device code flow).
+1. You sign in with Yoto OAuth (browser PKCE flow).
 2. The service connects to your players via MQTT and listens for track-change events.
 3. When a configured track starts playing, the service sends `card/start` to jump to the next non-skipped track.
 4. Skip profiles are stored locally in SQLite (`data/skip.db`) using Node's built-in `node:sqlite` module.
+
+## Deploy on Railway
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template?template=https://github.com/salmic/yoto-track-skip)
+
+1. Create a new Railway project from this repo (or click the button above).
+2. Add these **variables** in Railway → your service → Variables:
+   - `YOTO_CLIENT_ID` — your Yoto developer client ID
+   - `YOTO_CLIENT_SECRET` — leave empty unless your Yoto app requires it
+3. Add a **volume** mounted at `/data` so skip profiles and login tokens survive redeploys:
+   - Railway → your service → Settings → Volumes → Add volume
+   - Mount path: `/data`
+   - Variable: `DATA_DIR=/data`
+4. Generate a public domain: Railway → Settings → Networking → Generate domain.
+5. In your [Yoto developer app](https://yoto.dev/), add this **redirect URI** (use your Railway domain):
+   ```
+   https://YOUR-RAILWAY-DOMAIN/login
+   ```
+   `PUBLIC_BASE_URL` is auto-detected from `RAILWAY_PUBLIC_DOMAIN`; override it only if you use a custom domain.
+6. Deploy. Open your Railway URL, sign in with Yoto, and configure skip profiles.
+
+The Dockerfile builds the API and web UI. Railway sets `PORT` automatically; the health check uses `/api/health`.
 
 ## Windows service (always-on)
 
@@ -61,8 +83,8 @@ Download [NSSM](https://nssm.cc/) and place `nssm.exe` in `tools\nssm.exe`, or i
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/api/auth/status` | Login state |
-| POST | `/api/auth/login` | Start OAuth device flow |
-| POST | `/api/auth/poll` | Poll OAuth completion |
+| POST | `/api/auth/login` | Start OAuth PKCE flow (returns auth URL) |
+| POST | `/api/auth/callback` | Complete OAuth after redirect |
 | POST | `/api/auth/logout` | Log out |
 | GET | `/api/devices` | List players + MQTT status |
 | GET | `/api/cards` | User card library |

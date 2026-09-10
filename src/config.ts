@@ -4,13 +4,30 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
+function resolvePublicBaseUrl(port: number): string {
+  if (process.env.PUBLIC_BASE_URL) {
+    return process.env.PUBLIC_BASE_URL.replace(/\/$/, '')
+  }
+
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+  }
+
+  if (process.env.RAILWAY_STATIC_URL) {
+    return process.env.RAILWAY_STATIC_URL.replace(/\/$/, '')
+  }
+
+  return `http://localhost:${port}`
+}
+
+const port = Number(process.env.PORT ?? 3847)
 const dataDir = process.env.DATA_DIR ?? join(process.cwd(), 'data')
 mkdirSync(dataDir, { recursive: true })
 
 export const config = {
-  port: Number(process.env.PORT ?? 3847),
+  port,
   host: process.env.HOST ?? '0.0.0.0',
-  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3847}`,
+  publicBaseUrl: resolvePublicBaseUrl(port),
   dataDir,
   dbPath: join(dataDir, 'skip.db'),
   yotoClientId: process.env.YOTO_CLIENT_ID ?? '',
