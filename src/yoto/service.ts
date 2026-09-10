@@ -4,12 +4,13 @@ import { config } from '../config.js'
 import { getDb } from '../db/index.js'
 import { SkipEngine } from '../skip/engine.js'
 import { fetchCardContent, listUserCards } from './content.js'
-import type { ActivityEntry, DeviceStatus, PlaybackEvent } from '../types.js'
+import type { ActivityEntry, DeviceInfo, DeviceStatus, PlaybackEvent } from '../types.js'
 
 export class YotoService {
   private account: YotoAccount | null = null
   private skipEngine: SkipEngine | null = null
   private starting = false
+  private deviceCatalog = new Map<string, DeviceInfo>()
 
   async start(skipEngine: SkipEngine): Promise<void> {
     if (this.starting || this.account?.running) return
@@ -75,10 +76,9 @@ export class YotoService {
         lastCardByDevice.set(deviceId, playback.cardId)
       }
 
-      const device = this.account?.getDevice(deviceId)
       const event: PlaybackEvent = {
         deviceId,
-        deviceName: device?.device?.name ?? deviceId,
+        deviceName: this.getDeviceName(deviceId),
         cardId: playback.cardId ?? '',
         cardTitle: playback.cardTitle ?? undefined,
         chapterKey: playback.chapterKey ?? '',
@@ -93,6 +93,26 @@ export class YotoService {
     })
 
     await this.account.start()
+    await this.refreshDeviceCatalog(client)
+  }
+
+  private async refreshDeviceCatalog(client: YotoClient): Promise<void> {
+    const { devices } = await client.getDevices()
+    this.deviceCatalog.clear()
+    for (const device of devices) {
+      this.deviceCatalog.set(device.deviceId, {
+        deviceId: device.deviceId,
+        name: device.name,
+        description: device.description,
+        deviceType: device.deviceType,
+        deviceFamily: device.deviceFamily,
+        online: device.online
+      })
+    }
+  }
+
+  private getDeviceName(deviceId: string): string {
+    return this.deviceCatalog.get(deviceId)?.name ?? deviceId
   }
 
   async stop(): Promise<void> {
@@ -100,6 +120,7 @@ export class YotoService {
       await this.account.stop()
     }
     this.account = null
+    this.deviceCatalog.clear()
   }
 
   async restart(skipEngine: SkipEngine): Promise<void> {
@@ -115,17 +136,20 @@ export class YotoService {
     return this.account?.client ?? authService.getClient()
   }
 
-  listDevices(): DeviceStatus[] {
-    if (!this.account) return []
-    return this.account.getDeviceIds().map((deviceId) => {
-      const device = this.account!.getDevice(deviceId)
+  async listDevices(): Promise<DeviceStatus[]> {
+    const client = this.getClient()
+    if (!client) return []
+
+    await this.refreshDeviceCatalog(client)
+
+    return Array.from(this.deviceCatalog.values()).map((device) => {
+      const model = this.account?.getDevice(device.deviceId)
       return {
-        deviceId,
-        name: device?.device?.name ?? deviceId,
-        online: device?.deviceOnline ?? false,
-        mqttConnected: device?.mqttConnected ?? false,
-        batteryLevel: device?.status?.batteryLevelPercentage,
-        activeCard: device?.status?.activeCardId ?? device?.playback?.cardId ?? undefined
+        ...device,
+        online: model?.deviceOnline ?? device.online,
+        mqttConnected: model?.mqttConnected ?? false,
+        batteryLevel: model?.status?.batteryLevelPercentage,
+        activeCard: model?.status?.activeCardId ?? model?.playback?.cardId ?? undefined
       }
     })
   }
@@ -170,7 +194,7 @@ export class YotoService {
     return getDb().addActivity({
       timestamp: new Date().toISOString(),
       deviceId,
-      deviceName: device.device?.name ?? deviceId,
+      deviceName: this.getDeviceName(deviceId),
       cardId: action.cardId,
       cardTitle,
       skippedTrackKey: action.skippedTrackKey,

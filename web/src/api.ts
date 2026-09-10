@@ -15,6 +15,9 @@ export interface LoginStart {
 export interface DeviceStatus {
   deviceId: string
   name: string
+  description: string
+  deviceType: string
+  deviceFamily: string
   online: boolean
   mqttConnected: boolean
   batteryLevel?: number

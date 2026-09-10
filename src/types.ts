@@ -39,10 +39,16 @@ export interface AuthTokens {
   expiresAt: string
 }
 
-export interface DeviceStatus {
+export interface DeviceInfo {
   deviceId: string
   name: string
+  description: string
+  deviceType: string
+  deviceFamily: string
   online: boolean
+}
+
+export interface DeviceStatus extends DeviceInfo {
   mqttConnected: boolean
   batteryLevel?: number
   activeCard?: string
