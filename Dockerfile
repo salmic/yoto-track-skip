@@ -1,4 +1,6 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
+
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
@@ -13,7 +15,9 @@ COPY web ./web
 
 RUN npm run build
 
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
+
+RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 

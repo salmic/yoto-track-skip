@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
+import Database from 'better-sqlite3'
 import { config } from '../config.js'
 import type {
   ActivityEntry,
@@ -14,10 +14,10 @@ import type {
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export class AppDatabase {
-  private db: DatabaseSync
+  private db: Database.Database
 
   constructor(dbPath = config.dbPath) {
-    this.db = new DatabaseSync(dbPath)
+    this.db = new Database(dbPath)
     const schemaPath = [join(__dirname, 'schema.sql'), join(process.cwd(), 'src/db/schema.sql')].find((path) =>
       existsSync(path)
     )

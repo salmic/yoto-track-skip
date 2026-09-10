@@ -43,7 +43,7 @@ Open http://localhost:3847 (or http://localhost:5173 during frontend dev), conne
 1. You sign in with Yoto OAuth (browser PKCE flow).
 2. The service connects to your players via MQTT and listens for track-change events.
 3. When a configured track starts playing, the service sends `card/start` to jump to the next non-skipped track.
-4. Skip profiles are stored locally in SQLite (`data/skip.db`) using Node's built-in `node:sqlite` module.
+4. Skip profiles are stored locally in SQLite (`data/skip.db`) via `better-sqlite3`.
 
 ## Deploy on Railway
 
