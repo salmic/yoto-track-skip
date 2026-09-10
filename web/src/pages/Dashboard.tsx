@@ -12,9 +12,11 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
   const [devices, setDevices] = useState<DeviceStatus[]>([])
   const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   const load = async () => {
     setError(null)
+    setRefreshing(true)
     try {
       const [profileResult, deviceResult, activityResult] = await Promise.all([
         api.getProfiles(),
@@ -27,6 +29,8 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
       await onRefreshAuth()
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard')
+    } finally {
+      setRefreshing(false)
     }
   }
 
@@ -49,7 +53,12 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
   return (
     <>
       <div className="card">
-        <h2>Players</h2>
+        <div className="actions" style={{ justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+          <h2 style={{ margin: 0 }}>Players</h2>
+          <button className="secondary" type="button" disabled={refreshing} onClick={() => void load()}>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
         <p className="muted">
           Service {serviceRunning ? 'running' : 'stopped'} — auto-skip works when players are connected.
         </p>
@@ -65,7 +74,12 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
                     {device.name}
                   </strong>
                   <div className="muted">
+                    {device.deviceType}
+                    {device.description ? ` · ${device.description}` : ''}
+                  </div>
+                  <div className="muted">
                     {device.online ? 'Online' : 'Offline'}
+                    {device.mqttConnected ? ' · Connected for auto-skip' : ' · Not connected for auto-skip'}
                     {device.batteryLevel != null ? ` · Battery ${device.batteryLevel}%` : ''}
                   </div>
                 </div>
