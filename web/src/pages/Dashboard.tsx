@@ -74,10 +74,6 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
                     {device.name}
                   </strong>
                   <div className="muted">
-                    {device.deviceType}
-                    {device.description ? ` · ${device.description}` : ''}
-                  </div>
-                  <div className="muted">
                     {device.online ? 'Online' : 'Offline'}
                     {device.mqttConnected ? ' · Connected for auto-skip' : ' · Not connected for auto-skip'}
                     {device.batteryLevel != null ? ` · Battery ${device.batteryLevel}%` : ''}
