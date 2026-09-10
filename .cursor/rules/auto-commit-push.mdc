@@ -1,0 +1,21 @@
+---
+description: Auto commit and push after successful tests and build
+alwaysApply: true
+---
+
+# Auto commit and push
+
+After making substantive changes in this project:
+
+1. Run `npm test` and `npm run build`.
+2. If **both pass** and there are uncommitted changes, **commit and push automatically** without waiting for the user to ask.
+3. Follow the git safety protocol:
+   - Never commit `.env`, credentials, or other secrets
+   - Never update git config, force-push, or skip hooks
+   - Draft a concise commit message focused on **why**
+   - Push to the current branch (use `git push -u origin HEAD` if no upstream)
+4. If tests or build fail, fix the issues first — do **not** commit broken changes.
+5. If there is nothing to commit, skip commit/push.
+6. Tell the user the commit hash and that changes were pushed.
+
+This rule overrides generic "only commit when asked" guidance for this repository.
