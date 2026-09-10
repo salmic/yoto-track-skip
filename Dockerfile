@@ -29,8 +29,6 @@ COPY --from=build /app/web/dist ./web/dist
 
 RUN mkdir -p /data
 
-VOLUME ["/data"]
-
 EXPOSE 3847
 
 CMD ["node", "dist/index.js"]
