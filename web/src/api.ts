@@ -3,6 +3,9 @@ export interface AuthStatus {
   expiresAt: string | null
   yotoConfigured: boolean
   serviceRunning: boolean
+  hasDeviceAccess?: boolean
+  needsReauth?: boolean
+  serviceError?: string | null
   redirectUri?: string
 }
 
@@ -95,7 +98,7 @@ export const api = {
       body: JSON.stringify({ code, state })
     }),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  getDevices: () => request<{ devices: DeviceStatus[] }>('/api/devices'),
+  getDevices: () => request<{ devices: DeviceStatus[]; error?: string }>('/api/devices'),
   getCards: () => request<{ cards: CardSummary[] }>('/api/cards'),
   getCardContent: (cardId: string, refresh = false) =>
     request<CardContent>(`/api/cards/${cardId}/content${refresh ? '?refresh=true' : ''}`),

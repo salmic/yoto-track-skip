@@ -3,6 +3,7 @@ import { authService } from '../auth/yoto-auth.js'
 import { config } from '../config.js'
 import { getDb } from '../db/index.js'
 import { SkipEngine } from '../skip/engine.js'
+import { formatYotoApiError, reauthMessage } from '../auth/permissions.js'
 import { fetchCardContent, listUserCards } from './content.js'
 import type { ActivityEntry, DeviceInfo, DeviceStatus, PlaybackEvent } from '../types.js'
 
@@ -11,6 +12,7 @@ export class YotoService {
   private skipEngine: SkipEngine | null = null
   private starting = false
   private deviceCatalog = new Map<string, DeviceInfo>()
+  private lastError: string | null = null
 
   async start(skipEngine: SkipEngine): Promise<void> {
     if (this.starting || this.account?.running) return
@@ -18,13 +20,25 @@ export class YotoService {
     this.skipEngine = skipEngine
 
     try {
+      const access = await authService.checkDeviceAccess()
+      if (!access.ok) {
+        this.lastError = access.message ?? 'Missing Yoto device permissions'
+        return
+      }
+
       const client = await authService.initializeClient()
       if (!client) {
-        this.starting = false
+        this.lastError = 'Not authenticated'
         return
       }
 
       await this.startAccount(client)
+      if (this.account?.running) {
+        this.lastError = null
+      }
+    } catch (error) {
+      this.lastError = reauthMessage(formatYotoApiError(error))
+      console.error('[yoto] Failed to start service:', this.lastError)
     } finally {
       this.starting = false
     }
@@ -58,6 +72,11 @@ export class YotoService {
     })
 
     const lastCardByDevice = new Map<string, string>()
+
+    this.account.on('error', ({ error, context }) => {
+      this.lastError = reauthMessage(formatYotoApiError(error))
+      console.error('[yoto] Account error:', this.lastError, context)
+    })
 
     this.account.on('playbackUpdate', ({ deviceId, playback }) => {
       if (!this.skipEngine || !playback) return
@@ -97,8 +116,13 @@ export class YotoService {
       })
     })
 
-    await this.account.start()
-    await this.refreshDeviceCatalog(client)
+    try {
+      await this.account.start()
+      await this.refreshDeviceCatalog(client)
+    } catch (error) {
+      this.lastError = reauthMessage(formatYotoApiError(error))
+      throw error
+    }
   }
 
   private async refreshDeviceCatalog(client: YotoClient): Promise<void> {
@@ -137,6 +161,10 @@ export class YotoService {
     return this.account?.running ?? false
   }
 
+  getLastError(): string | null {
+    return this.lastError
+  }
+
   getClient(): YotoClient | null {
     return this.account?.client ?? authService.getClient()
   }
@@ -152,15 +180,23 @@ export class YotoService {
     }
   }
 
-  async listDevices(): Promise<DeviceStatus[]> {
+  async listDevices(): Promise<{ devices: DeviceStatus[]; error?: string }> {
     await this.ensureRunning()
 
     const client = this.getClient()
-    if (!client) return []
+    if (!client) {
+      return { devices: [], error: this.lastError ?? 'Not authenticated' }
+    }
 
-    await this.refreshDeviceCatalog(client)
+    try {
+      await this.refreshDeviceCatalog(client)
+    } catch (error) {
+      const message = reauthMessage(formatYotoApiError(error))
+      this.lastError = message
+      return { devices: [], error: message }
+    }
 
-    return Promise.all(
+    const devices = await Promise.all(
       Array.from(this.deviceCatalog.values()).map(async (device) => {
         const model = this.account?.getDevice(device.deviceId)
         let online = device.online
@@ -194,6 +230,8 @@ export class YotoService {
         }
       })
     )
+
+    return { devices, error: this.lastError ?? undefined }
   }
 
   async getCards() {

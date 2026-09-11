@@ -3,6 +3,7 @@ import { config, assertYotoConfigured } from '../config.js'
 import { getDb } from '../db/index.js'
 import type { AuthTokens } from '../types.js'
 import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce.js'
+import { formatYotoApiError, reauthMessage } from './permissions.js'
 
 const OAUTH_SCOPES = [
   'openid',
@@ -141,6 +142,25 @@ export class YotoAuthService {
     getDb().clearAuthTokens()
     this.client = null
     pkceSessions.clear()
+  }
+
+  async checkDeviceAccess(): Promise<{ ok: boolean; message?: string }> {
+    if (!this.isAuthenticated()) {
+      return { ok: false, message: 'Not signed in' }
+    }
+
+    const client = await this.initializeClient()
+    if (!client) {
+      return { ok: false, message: 'Not signed in' }
+    }
+
+    try {
+      await client.getDevices()
+      return { ok: true }
+    } catch (error) {
+      const message = reauthMessage(formatYotoApiError(error))
+      return { ok: false, message }
+    }
   }
 }
 

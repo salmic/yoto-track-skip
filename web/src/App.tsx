@@ -7,12 +7,14 @@ import { Login } from './pages/Login'
 
 export default function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null)
+  const [authBanner, setAuthBanner] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
   const refreshAuth = useCallback(async () => {
     const status = await api.getAuthStatus()
     setAuth(status)
+    setAuthBanner(status.needsReauth ? status.serviceError ?? null : null)
     return status
   }, [])
 
@@ -56,6 +58,14 @@ export default function App() {
           </div>
         ) : null}
       </header>
+
+      {authBanner ? (
+        <div className="card" style={{ borderColor: '#c0392b', marginBottom: '1rem' }}>
+          <p className="error" style={{ margin: 0 }}>
+            {authBanner}
+          </p>
+        </div>
+      ) : null}
 
       <Routes>
         <Route

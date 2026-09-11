@@ -5,14 +5,25 @@ import { yotoService, createSkipEngine } from '../../yoto/service.js'
 
 export const authRouter = Router()
 
-authRouter.get('/status', (_req, res) => {
-  res.json({
-    authenticated: authService.isAuthenticated(),
-    expiresAt: authService.getTokenExpiry(),
-    yotoConfigured: Boolean(config.yotoClientId),
-    serviceRunning: yotoService.isRunning(),
-    redirectUri: authService.getRedirectUri()
-  })
+authRouter.get('/status', async (_req, res, next) => {
+  try {
+    const deviceAccess = authService.isAuthenticated()
+      ? await authService.checkDeviceAccess()
+      : { ok: false as const }
+
+    res.json({
+      authenticated: authService.isAuthenticated(),
+      expiresAt: authService.getTokenExpiry(),
+      yotoConfigured: Boolean(config.yotoClientId),
+      serviceRunning: yotoService.isRunning(),
+      hasDeviceAccess: deviceAccess.ok,
+      needsReauth: authService.isAuthenticated() && !deviceAccess.ok,
+      serviceError: yotoService.getLastError() ?? deviceAccess.message ?? null,
+      redirectUri: authService.getRedirectUri()
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 authRouter.post('/login', (_req, res, next) => {

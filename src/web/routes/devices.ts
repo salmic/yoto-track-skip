@@ -5,7 +5,7 @@ export const devicesRouter = Router()
 
 devicesRouter.get('/', async (_req, res, next) => {
   try {
-    res.json({ devices: await yotoService.listDevices() })
+    res.json(await yotoService.listDevices())
   } catch (error) {
     next(error)
   }

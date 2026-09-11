@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, type ActivityEntry, type DeviceStatus, type SkipProfile } from '../api'
+import { api, type ActivityEntry, type AuthStatus, type DeviceStatus, type SkipProfile } from '../api'
 
 interface DashboardProps {
-  onRefreshAuth: () => Promise<unknown>
+  onRefreshAuth: () => Promise<AuthStatus>
   serviceRunning: boolean
 }
 
@@ -26,7 +26,12 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
       setProfiles(profileResult.profiles)
       setDevices(deviceResult.devices)
       setActivity(activityResult.activity)
-      await onRefreshAuth()
+      const authStatus = await onRefreshAuth()
+      if (deviceResult.error) {
+        setError(deviceResult.error)
+      } else if (authStatus.serviceError) {
+        setError(authStatus.serviceError)
+      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard')
     } finally {
