@@ -1,14 +1,12 @@
 import { config } from './config.js'
 import { authService } from './auth/yoto-auth.js'
-import { createSkipEngine, yotoService } from './yoto/service.js'
+import { getSkipEngine, yotoService } from './yoto/service.js'
 import { createApp } from './web/server.js'
 
 async function main(): Promise<void> {
-  const skipEngine = createSkipEngine()
-
   if (authService.isAuthenticated()) {
     try {
-      await yotoService.start(skipEngine)
+      await yotoService.start(getSkipEngine())
       console.log('Yoto service started')
     } catch (error) {
       console.error('Failed to start Yoto service:', error)

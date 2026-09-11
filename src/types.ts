@@ -11,6 +11,7 @@ export interface SkipProfile {
 export interface CardTrack {
   trackKey: string
   title: string
+  overlayLabel?: string
   durationSec?: number
 }
 

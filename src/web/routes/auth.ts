@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { authService, formatAuthError } from '../../auth/yoto-auth.js'
 import { config } from '../../config.js'
-import { yotoService, createSkipEngine } from '../../yoto/service.js'
+import { yotoService, getSkipEngine } from '../../yoto/service.js'
 
 export const authRouter = Router()
 
@@ -46,7 +46,7 @@ authRouter.post('/callback', async (req, res, next) => {
     }
 
     await authService.completeLogin(code, state)
-    await yotoService.restart(createSkipEngine())
+    await yotoService.restart(getSkipEngine())
 
     res.json({ ok: true })
   } catch (error) {

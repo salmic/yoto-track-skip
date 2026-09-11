@@ -75,4 +75,24 @@ describe('navigator', () => {
       })
     ).toBe(true)
   })
+
+  it('resolves playback tracks by overlay label index', () => {
+    const numberedContent: CardContent = {
+      ...sampleContent,
+      chapters: [
+        {
+          chapterKey: '01',
+          title: 'Intro',
+          tracks: [
+            { trackKey: 'hash-a', title: 'Theme Song', overlayLabel: '1' },
+            { trackKey: 'hash-b', title: 'Welcome', overlayLabel: '2' }
+          ]
+        }
+      ]
+    }
+
+    expect(
+      resolvePlaybackTrack(numberedContent, { trackKey: '1' })?.trackKey
+    ).toBe('hash-a')
+  })
 })

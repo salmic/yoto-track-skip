@@ -15,6 +15,7 @@ interface RawChapter {
 interface RawTrack {
   key?: string
   title?: string
+  overlayLabel?: string
   duration?: number
   media?: { duration?: number }
 }
@@ -62,6 +63,7 @@ function normalizeTrack(track: RawTrack, trackIndex: number): CardTrack {
   return {
     trackKey: track.key ?? String(trackIndex + 1).padStart(2, '0'),
     title: track.title ?? `Track ${trackIndex + 1}`,
+    overlayLabel: track.overlayLabel,
     durationSec: durationSec != null ? Math.round(durationSec) : undefined
   }
 }

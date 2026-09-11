@@ -67,7 +67,7 @@ export class YotoService {
         }
       },
       deviceOptions: {
-        httpPollIntervalMs: 600000
+        httpPollIntervalMs: 60000
       }
     })
 
@@ -80,6 +80,10 @@ export class YotoService {
 
     this.account.on('playbackUpdate', ({ deviceId, playback }) => {
       if (!this.skipEngine || !playback) return
+
+      console.log(
+        `[yoto] playback ${deviceId}: card=${playback.cardId ?? 'none'} track=${playback.trackKey ?? 'none'} status=${playback.playbackStatus ?? 'unknown'} source=${playback.source ?? 'unknown'}`
+      )
 
       if (playback.playbackStatus === 'stopped' && playback.cardId) {
         this.skipEngine.resetSession(deviceId, playback.cardId)
@@ -174,7 +178,7 @@ export class YotoService {
     if (!authService.isAuthenticated()) return
 
     try {
-      await this.start(createSkipEngine())
+      await this.start(getSkipEngine())
     } catch (error) {
       console.warn('[yoto] Failed to auto-start service:', error)
     }
@@ -205,15 +209,21 @@ export class YotoService {
 
         try {
           const status = await client.getDeviceStatus({ deviceId: device.deviceId })
-          online = status.isOnline
+          online = status.isOnline || device.online
           batteryLevel = status.batteryLevelPercentage
           activeCard = status.activeCard && status.activeCard !== 'none' ? status.activeCard : undefined
         } catch (error) {
           console.warn(`[yoto] getDeviceStatus failed for ${device.deviceId}:`, error)
+          try {
+            const configResponse = await client.getDeviceConfig({ deviceId: device.deviceId })
+            online = configResponse.device.online || device.online
+          } catch {
+            // fall through to model state
+          }
           if (model) {
-            online = model.deviceOnline
-            batteryLevel = model.status.batteryLevelPercentage
-            activeCard = model.status.activeCardId ?? model.playback?.cardId ?? undefined
+            online = online || model.deviceOnline
+            batteryLevel = batteryLevel ?? model.status.batteryLevelPercentage
+            activeCard = activeCard ?? model.status.activeCardId ?? model.playback?.cardId ?? undefined
           }
         }
 
@@ -223,7 +233,7 @@ export class YotoService {
 
         return {
           ...device,
-          online,
+          online: online || device.online || (model?.deviceOnline ?? false),
           mqttConnected: model?.mqttConnected ?? false,
           batteryLevel: batteryLevel ?? model?.status.batteryLevelPercentage,
           activeCard: activeCard ?? model?.status.activeCardId ?? model?.playback?.cardId ?? undefined
@@ -301,6 +311,15 @@ export class YotoService {
 }
 
 export const yotoService = new YotoService()
+
+let skipEngineInstance: SkipEngine | null = null
+
+export function getSkipEngine(): SkipEngine {
+  if (!skipEngineInstance) {
+    skipEngineInstance = createSkipEngine()
+  }
+  return skipEngineInstance
+}
 
 export function createSkipEngine(): SkipEngine {
   return new SkipEngine(getDb(), {

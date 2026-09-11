@@ -7,7 +7,8 @@ import {
   findNextAllowedTrack,
   flattenTracks,
   isPlaybackTrackSkipped,
-  resolvePlaybackTrack
+  resolvePlaybackTrack,
+  type TrackLocation
 } from './navigator.js'
 
 export interface SkipAction {
@@ -46,11 +47,16 @@ export class SkipEngine {
   }
 
   async handlePlayback(event: PlaybackEvent): Promise<void> {
-    if (!event.cardId || !event.trackKey) return
+    if (!event.cardId) return
     if (!this.isActivePlaybackStatus(event.playbackStatus)) return
 
     const profile = this.db.getProfile(event.cardId)
-    if (!profile?.enabled || profile.skipTrackKeys.length === 0) return
+    if (!profile?.enabled || profile.skipTrackKeys.length === 0) {
+      if (!profile) {
+        this.deps.log?.(`No skip profile for card ${event.cardId}`)
+      }
+      return
+    }
 
     let content = await this.deps.getCardContent(event.cardId)
     if (!content) {
@@ -62,6 +68,19 @@ export class SkipEngine {
     }
 
     const skipSet = new Set(profile.skipTrackKeys)
+
+    if (event.cardInserted && event.source === 'card') {
+      const firstTrack = flattenTracks(content)[0]
+      const firstAllowed = findFirstAllowedTrack(content, skipSet)
+      if (firstTrack && firstAllowed && skipSet.has(firstTrack.trackKey)) {
+        this.deps.log?.(`Card inserted on ${event.cardId}, skipping leading track(s)`)
+        await this.executeSkip(event, content, firstTrack, firstAllowed, skipSet)
+        return
+      }
+    }
+
+    if (!event.trackKey) return
+
     const resolvedTrack = this.resolveCurrentTrack(content, event)
     const currentTrackKey = resolvedTrack?.trackKey ?? event.trackKey
 
@@ -124,22 +143,55 @@ export class SkipEngine {
       return
     }
 
-    session.autoSkipCount += 1
-    session.pendingSkipTo = nextTrack.trackKey
-    this.sessions.set(sessionKey, session)
+    const skippedTrack =
+      resolvedTrack ??
+      resolvePlaybackTrack(content, event) ?? {
+        chapterKey: event.chapterKey,
+        trackKey: currentTrackKey,
+        chapterTitle: event.chapterTitle ?? '',
+        trackTitle: event.trackTitle ?? currentTrackKey
+      }
+
+    await this.executeSkip(event, content, skippedTrack, nextTrack, skipSet, session)
+  }
+
+  private async executeSkip(
+    event: PlaybackEvent,
+    content: CardContent,
+    skippedTrack: TrackLocation,
+    nextTrack: TrackLocation,
+    _skipSet: Set<string>,
+    session?: SessionState
+  ): Promise<void> {
+    const sessionKey = this.sessionKey(event.deviceId, event.cardId)
+    const activeSession = session ?? this.sessions.get(sessionKey) ?? { autoSkipCount: 0 }
+
+    if (activeSession.autoSkipCount >= config.maxAutoSkipsPerSession) {
+      this.deps.log?.(`Max auto-skips reached for ${event.cardId} on ${event.deviceId}`)
+      return
+    }
+
+    activeSession.autoSkipCount += 1
+    activeSession.pendingSkipTo = nextTrack.trackKey
+    activeSession.lastTrackKey = skippedTrack.trackKey
+    activeSession.lastEventAt = Date.now()
+    this.sessions.set(sessionKey, activeSession)
 
     const skippedTrackTitle =
-      resolvedTrack?.trackTitle ?? findTrackTitle(content, currentTrackKey) ?? event.trackTitle ?? currentTrackKey
+      skippedTrack.trackTitle ??
+      findTrackTitle(content, skippedTrack.trackKey) ??
+      event.trackTitle ??
+      skippedTrack.trackKey
 
     this.deps.log?.(
-      `Skipping ${skippedTrackTitle} (${currentTrackKey}) -> ${nextTrack.trackTitle} (${nextTrack.trackKey}) on ${event.deviceId}`
+      `Skipping ${skippedTrackTitle} (${skippedTrack.trackKey}) -> ${nextTrack.trackTitle} (${nextTrack.trackKey}) on ${event.deviceId}`
     )
 
     await this.deps.onSkip(event.deviceId, {
       cardId: event.cardId,
       chapterKey: nextTrack.chapterKey,
       trackKey: nextTrack.trackKey,
-      skippedTrackKey: currentTrackKey,
+      skippedTrackKey: skippedTrack.trackKey,
       skippedTrackTitle,
       jumpedToTrackTitle: nextTrack.trackTitle
     })
