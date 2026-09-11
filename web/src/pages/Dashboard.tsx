@@ -75,12 +75,12 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
               <li key={device.deviceId} className="device-item">
                 <div>
                   <strong>
-                    <span className={`status-dot ${device.mqttConnected ? 'online' : 'offline'}`} />
+                    <span className={`status-dot ${device.online ? 'online' : 'offline'}`} />
                     {device.name}
                   </strong>
                   <div className="muted">
                     {device.online ? 'Online' : 'Offline'}
-                    {device.mqttConnected ? ' · Connected for auto-skip' : ' · Not connected for auto-skip'}
+                    {device.online ? ' · Connected for auto-skip' : ' · Not connected for auto-skip'}
                     {device.batteryLevel != null ? ` · Battery ${device.batteryLevel}%` : ''}
                   </div>
                 </div>
