@@ -56,7 +56,7 @@ export class SkipEngine {
     const profile = this.db.getProfile(event.cardId)
     if (!profile?.enabled || profile.skipTrackKeys.length === 0) {
       if (!profile) {
-        this.deps.log?.(`No skip profile for card ${event.cardId}`)
+        this.deps.log?.(`No skip profile for card ${this.cardLabel(event)}`)
       }
       return
     }
@@ -66,7 +66,9 @@ export class SkipEngine {
       content = await this.deps.getCardContent(event.cardId, true)
     }
     if (!content || content.chapters.length === 0) {
-      this.deps.log?.(`No card content for ${event.cardId}, skipping auto-skip`)
+      this.deps.log?.(
+        `No card content for ${this.cardLabel(event, content, profile)}, skipping auto-skip`
+      )
       return
     }
 
@@ -80,7 +82,9 @@ export class SkipEngine {
         firstAllowed &&
         firstTrack.trackKey !== firstAllowed.trackKey
       ) {
-        this.deps.log?.(`Card inserted on ${event.cardId}, skipping leading track(s)`)
+        this.deps.log?.(
+          `Card inserted on ${this.cardLabel(event, content, profile)}, skipping leading track(s)`
+        )
         await this.executeSkip(event, content, firstTrack, firstAllowed, skipSet)
         return
       }
@@ -167,14 +171,18 @@ export class SkipEngine {
     }
 
     if (!nextTrack) {
-      this.deps.log?.(`All remaining tracks skipped for card ${event.cardId}`)
+      this.deps.log?.(
+        `All remaining tracks skipped for card ${this.cardLabel(event, content, profile)}`
+      )
       await this.deps.onStop?.(event.deviceId, event.cardId)
       this.sessions.set(sessionKey, session)
       return
     }
 
     if (session.autoSkipCount >= config.maxAutoSkipsPerSession) {
-      this.deps.log?.(`Max auto-skips reached for ${event.cardId} on ${event.deviceId}`)
+      this.deps.log?.(
+        `Max auto-skips reached for ${this.cardLabel(event, content, profile)} on ${this.deviceLabel(event)}`
+      )
       return
     }
 
@@ -202,7 +210,9 @@ export class SkipEngine {
     const activeSession = session ?? this.sessions.get(sessionKey) ?? { autoSkipCount: 0 }
 
     if (activeSession.autoSkipCount >= config.maxAutoSkipsPerSession) {
-      this.deps.log?.(`Max auto-skips reached for ${event.cardId} on ${event.deviceId}`)
+      this.deps.log?.(
+        `Max auto-skips reached for ${this.cardLabel(event, content)} on ${this.deviceLabel(event)}`
+      )
       return
     }
 
@@ -219,7 +229,7 @@ export class SkipEngine {
       skippedTrack.trackKey
 
     this.deps.log?.(
-      `Skipping ${skippedTrackTitle} (${skippedTrack.trackKey}) -> ${nextTrack.trackTitle} (${nextTrack.trackKey}) on ${event.deviceId}`
+      `Skipping ${skippedTrackTitle} (${skippedTrack.trackKey}) -> ${nextTrack.trackTitle} (${nextTrack.trackKey}) on ${this.deviceLabel(event)}`
     )
 
     await this.deps.onSkip(event.deviceId, {
@@ -258,7 +268,7 @@ export class SkipEngine {
 
     session.preemptedFromTrackKey = currentTrack.trackKey
     this.deps.log?.(
-      `Preempting upcoming skipped track on ${event.deviceId} (${remaining.toFixed(1)}s left on ${currentTrack.trackTitle})`
+      `Preempting upcoming skipped track on ${this.deviceLabel(event)} (${remaining.toFixed(1)}s left on ${currentTrack.trackTitle})`
     )
     await this.executeSkip(event, content, immediateNext, jumpTo, skipSet, session)
   }
@@ -280,5 +290,17 @@ export class SkipEngine {
 
   private sessionKey(deviceId: string, cardId: string): string {
     return `${deviceId}:${cardId}`
+  }
+
+  private deviceLabel(event: PlaybackEvent): string {
+    return event.deviceName || event.deviceId
+  }
+
+  private cardLabel(
+    event: PlaybackEvent,
+    content?: CardContent | null,
+    profile?: { cardTitle: string } | null
+  ): string {
+    return event.cardTitle ?? content?.title ?? profile?.cardTitle ?? event.cardId
   }
 }

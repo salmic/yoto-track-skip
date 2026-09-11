@@ -3,12 +3,7 @@ import { authService } from '../auth/yoto-auth.js'
 import { config } from '../config.js'
 import { getDb } from '../db/index.js'
 import { SkipEngine } from '../skip/engine.js'
-import {
-  formatYotoApiError,
-  isMissingCriticalDeviceScope,
-  isMissingDeviceStatusScope,
-  reauthMessage
-} from '../auth/permissions.js'
+import { formatYotoApiError, reauthMessage } from '../auth/permissions.js'
 import { fetchCardContent, listUserCards } from './content.js'
 import type { ActivityEntry, DeviceInfo, DeviceStatus, PlaybackEvent } from '../types.js'
 
@@ -80,16 +75,6 @@ export class YotoService {
 
     this.account.on('error', ({ error, context }) => {
       const raw = formatYotoApiError(error)
-      if (
-        isMissingDeviceStatusScope(raw) &&
-        !isMissingCriticalDeviceScope(raw)
-      ) {
-        console.warn(
-          '[yoto] Device status HTTP API unavailable (optional scope); using MQTT:',
-          context
-        )
-        return
-      }
       const friendly = reauthMessage(raw)
       this.lastError = friendly
       console.error(
@@ -103,8 +88,13 @@ export class YotoService {
     this.account.on('playbackUpdate', ({ deviceId, playback }) => {
       if (!this.skipEngine || !playback) return
 
+      const deviceName = this.getDeviceName(deviceId)
+      const cardLabel = playback.cardId
+        ? this.getCardTitle(playback.cardId, playback.cardTitle ?? undefined)
+        : 'none'
+
       console.log(
-        `[yoto] playback ${deviceId}: card=${playback.cardId ?? 'none'} track=${playback.trackKey ?? 'none'} status=${playback.playbackStatus ?? 'unknown'} source=${playback.source ?? 'unknown'}`
+        `[yoto] playback ${deviceName}: card=${cardLabel} track=${playback.trackKey ?? 'none'} status=${playback.playbackStatus ?? 'unknown'} source=${playback.source ?? 'unknown'}`
       )
 
       if (playback.playbackStatus === 'stopped' && playback.cardId) {
@@ -123,7 +113,7 @@ export class YotoService {
         lastCardByDevice.set(deviceId, playback.cardId)
         if (cardInserted) {
           void this.getCardContent(playback.cardId).catch((error) => {
-            console.warn(`[yoto] Failed to prefetch card ${playback.cardId}:`, error)
+            console.warn(`[yoto] Failed to prefetch card ${cardLabel}:`, error)
           })
         }
       }
@@ -149,7 +139,7 @@ export class YotoService {
       }
 
       void this.skipEngine.handlePlayback(event).catch((error) => {
-        console.error(`[skip-engine] Failed to handle playback on ${deviceId}:`, error)
+        console.error(`[skip-engine] Failed to handle playback on ${deviceName}:`, error)
       })
     })
 
@@ -182,12 +172,24 @@ export class YotoService {
     return this.deviceCatalog.get(deviceId)?.name ?? deviceId
   }
 
+  private getCardTitle(cardId: string, playbackTitle?: string): string {
+    return (
+      playbackTitle ??
+      getDb().getCachedCard(cardId)?.title ??
+      getDb().getProfile(cardId)?.cardTitle ??
+      cardId
+    )
+  }
+
   warmSkipProfileCaches(): void {
     if (!this.getClient()) return
     for (const profile of getDb().listProfiles()) {
       if (!profile.enabled || profile.skipTrackKeys.length === 0) continue
       void this.getCardContent(profile.cardId).catch((error) => {
-        console.warn(`[yoto] Failed to warm cache for ${profile.cardId}:`, error)
+        console.warn(
+          `[yoto] Failed to warm cache for ${profile.cardTitle ?? profile.cardId}:`,
+          error
+        )
       })
     }
   }
@@ -293,16 +295,19 @@ export class YotoService {
       jumpedToTrackTitle: string
     }
   ): Promise<ActivityEntry> {
+    const deviceName = this.getDeviceName(deviceId)
     const device = this.account?.getDevice(deviceId)
     if (!device) {
-      throw new Error(`Device ${deviceId} not found`)
+      throw new Error(`Device ${deviceName} not found`)
     }
     if (!device.mqttConnected) {
-      throw new Error(`Device ${deviceId} is not connected via MQTT`)
+      throw new Error(`Device ${deviceName} is not connected via MQTT`)
     }
 
+    const cardTitle = this.getCardTitle(action.cardId)
+
     console.log(
-      `[yoto] startCard ${action.cardId} ${action.chapterKey}/${action.trackKey} on ${deviceId}`
+      `[yoto] startCard ${cardTitle} ${action.chapterKey}/${action.trackKey} on ${deviceName}`
     )
 
     await device.startCard({
@@ -311,9 +316,6 @@ export class YotoService {
       trackKey: action.trackKey,
       secondsIn: 0
     })
-
-    const content = getDb().getCachedCard(action.cardId)
-    const cardTitle = content?.title ?? action.cardId
 
     return getDb().addActivity({
       timestamp: new Date().toISOString(),
@@ -355,7 +357,9 @@ export function createSkipEngine(): SkipEngine {
       try {
         return await yotoService.getCardContent(cardId, force)
       } catch (error) {
-        console.warn(`[skip-engine] Failed to fetch content for ${cardId}:`, error)
+        const profile = getDb().getProfile(cardId)
+        const cardLabel = cached?.title ?? profile?.cardTitle ?? cardId
+        console.warn(`[skip-engine] Failed to fetch content for ${cardLabel}:`, error)
         return cached ?? null
       }
     },

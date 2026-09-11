@@ -12,7 +12,7 @@ const devicePath = path.join(
   'yoto-device.js'
 )
 
-const MARKER = 'family:device-status:view may be unavailable'
+const MARKER = 'yoto-track-skip: deprecated getDeviceStatus API not used'
 
 if (!fs.existsSync(devicePath)) {
   console.warn('[patch-yoto-client] yoto-device.js not found; skipping')
@@ -24,17 +24,9 @@ if (source.includes(MARKER)) {
   process.exit(0)
 }
 
-const startBlock = `      // Fetch device status from status endpoint
-      const statusResponse = await this.#client.getDeviceStatus({
-        deviceId: this.#state.device.deviceId
-      })
-
-      // Update status from dedicated status endpoint
-      this.#updateStatusFromStatusResponse(statusResponse)
-
-      // Also update from full status if available in config response`
-
-const startReplacement = `      // Fetch device status from status endpoint (optional scope; MQTT is primary)
+const replacements = [
+  [
+    `      // Fetch device status from status endpoint (optional scope; MQTT is primary)
       try {
         const statusResponse = await this.#client.getDeviceStatus({
           deviceId: this.#state.device.deviceId
@@ -44,15 +36,25 @@ const startReplacement = `      // Fetch device status from status endpoint (opt
         // family:device-status:view may be unavailable; continue with config/MQTT
       }
 
+      // Also update from full status if available in config response`,
+    `      // ${MARKER}
       // Also update from full status if available in config response`
+  ],
+  [
+    `      // Fetch device status from status endpoint
+      const statusResponse = await this.#client.getDeviceStatus({
+        deviceId: this.#state.device.deviceId
+      })
 
-const refreshBlock = `    // Also fetch and update status from status endpoint
-    const statusResponse = await this.#client.getDeviceStatus({
-      deviceId: this.#state.device.deviceId
-    })
-    this.#updateStatusFromStatusResponse(statusResponse)`
+      // Update status from dedicated status endpoint
+      this.#updateStatusFromStatusResponse(statusResponse)
 
-const refreshReplacement = `    // Also fetch and update status from status endpoint (optional scope)
+      // Also update from full status if available in config response`,
+    `      // ${MARKER}
+      // Also update from full status if available in config response`
+  ],
+  [
+    `    // Also fetch and update status from status endpoint (optional scope)
     try {
       const statusResponse = await this.#client.getDeviceStatus({
         deviceId: this.#state.device.deviceId
@@ -60,20 +62,48 @@ const refreshReplacement = `    // Also fetch and update status from status endp
       this.#updateStatusFromStatusResponse(statusResponse)
     } catch {
       // ignore; MQTT/config may still provide status
-    }`
+    }
 
-if (!source.includes(startBlock)) {
+`,
+    ''
+  ],
+  [
+    `    // Also fetch and update status from status endpoint
+    const statusResponse = await this.#client.getDeviceStatus({
+      deviceId: this.#state.device.deviceId
+    })
+    this.#updateStatusFromStatusResponse(statusResponse)
+
+`,
+    ''
+  ],
+  [
+    `      // Fetch and update status from status endpoint
+      const statusResponse = await this.#client.getDeviceStatus({
+        deviceId: this.#state.device.deviceId
+      })
+      this.#updateStatusFromStatusResponse(statusResponse)
+
+      // Also update from full status if available in config response`,
+    `      // ${MARKER}
+      // Also update from full status if available in config response`
+  ]
+]
+
+let applied = false
+for (const [from, to] of replacements) {
+  if (source.includes(from)) {
+    source = source.replace(from, to)
+    applied = true
+  }
+}
+
+if (!source.includes(MARKER)) {
   console.error(
-    '[patch-yoto-client] Unexpected yoto-device.js start(); patch not applied'
+    '[patch-yoto-client] Could not remove getDeviceStatus calls; yoto-device.js layout may have changed'
   )
   process.exit(1)
 }
 
-source = source.replace(startBlock, startReplacement)
-
-if (source.includes(refreshBlock)) {
-  source = source.replace(refreshBlock, refreshReplacement)
-}
-
 fs.writeFileSync(devicePath, source)
-console.log('[patch-yoto-client] Patched yoto-device.js for optional device-status API')
+console.log('[patch-yoto-client] Removed deprecated getDeviceStatus HTTP calls from yoto-device.js')
