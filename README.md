@@ -13,7 +13,12 @@ Auto-skip pre-configured tracks on Yoto cards. Configure skip lists in a local w
 ## Prerequisites
 
 1. [Node.js 20+](https://nodejs.org/)
-2. A [Yoto developer app](https://yoto.dev/) with `YOTO_CLIENT_ID` (and optional `YOTO_CLIENT_SECRET`)
+2. A [Yoto developer app](https://yoto.dev/) with `YOTO_CLIENT_ID` (and optional `YOTO_CLIENT_SECRET`), enabled for:
+   - `family:devices:view`
+   - `family:device-status:view`
+   - `family:devices:control`
+   - `family:library:view`
+   - `user:content:manage`
 3. Yoto player(s) linked to your Yoto account
 
 ## Setup

@@ -27,7 +27,11 @@ export function formatYotoApiError(error: unknown): string {
 }
 
 export function isMissingDeviceScope(message: string): boolean {
-  return message.includes('family:devices:view') || message.includes('family:devices:control')
+  return (
+    message.includes('family:devices:view') ||
+    message.includes('family:device-status:view') ||
+    message.includes('family:devices:control')
+  )
 }
 
 export function reauthMessage(message: string): string {

@@ -11,6 +11,7 @@ const OAUTH_SCOPES = [
   'offline_access',
   'family:library:view',
   'family:devices:view',
+  'family:device-status:view',
   'family:devices:control',
   'user:content:manage'
 ].join(' ')
@@ -155,7 +156,10 @@ export class YotoAuthService {
     }
 
     try {
-      await client.getDevices()
+      const { devices } = await client.getDevices()
+      if (devices.length > 0) {
+        await client.getDeviceStatus({ deviceId: devices[0]!.deviceId })
+      }
       return { ok: true }
     } catch (error) {
       const message = reauthMessage(formatYotoApiError(error))
