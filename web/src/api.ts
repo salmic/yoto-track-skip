@@ -23,7 +23,7 @@ export interface DeviceStatus {
   deviceFamily: string
   online: boolean
   mqttConnected: boolean
-  batteryLevelPercentage: number
+  batteryLevel: number
   activeCard?: string
 }
 

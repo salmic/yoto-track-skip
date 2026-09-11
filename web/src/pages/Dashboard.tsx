@@ -81,8 +81,8 @@ export function Dashboard({ onRefreshAuth, serviceRunning }: DashboardProps) {
                   <div className="muted">
                     {device.online ? 'Online' : 'Offline'}
                     {device.online ? ' · Connected for auto-skip' : ' · Not connected for auto-skip'}
-                    {device.batteryLevelPercentage != null
-                      ? ` · Battery ${device.batteryLevelPercentage}%`
+                    {device.batteryLevel != null
+                      ? ` · Battery ${device.batteryLevel}%`
                       : ''}
                   </div>
                 </div>
