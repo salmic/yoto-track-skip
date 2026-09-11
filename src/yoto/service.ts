@@ -3,7 +3,12 @@ import { authService } from '../auth/yoto-auth.js'
 import { config } from '../config.js'
 import { getDb } from '../db/index.js'
 import { SkipEngine } from '../skip/engine.js'
-import { formatYotoApiError, reauthMessage } from '../auth/permissions.js'
+import {
+  formatYotoApiError,
+  isMissingCriticalDeviceScope,
+  isMissingDeviceStatusScope,
+  reauthMessage
+} from '../auth/permissions.js'
 import { fetchCardContent, listUserCards } from './content.js'
 import type { ActivityEntry, DeviceInfo, DeviceStatus, PlaybackEvent } from '../types.js'
 
@@ -74,8 +79,25 @@ export class YotoService {
     const lastCardByDevice = new Map<string, string>()
 
     this.account.on('error', ({ error, context }) => {
-      this.lastError = reauthMessage(formatYotoApiError(error))
-      console.error('[yoto] Account error:', this.lastError, context)
+      const raw = formatYotoApiError(error)
+      if (
+        isMissingDeviceStatusScope(raw) &&
+        !isMissingCriticalDeviceScope(raw)
+      ) {
+        console.warn(
+          '[yoto] Device status HTTP API unavailable (optional scope); using MQTT:',
+          context
+        )
+        return
+      }
+      const friendly = reauthMessage(raw)
+      this.lastError = friendly
+      console.error(
+        '[yoto] Account error:',
+        friendly,
+        context,
+        raw !== friendly ? { raw } : undefined
+      )
     })
 
     this.account.on('playbackUpdate', ({ deviceId, playback }) => {

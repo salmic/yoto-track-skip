@@ -26,16 +26,29 @@ export function formatYotoApiError(error: unknown): string {
   return error instanceof Error ? error.message : 'Yoto API request failed'
 }
 
-export function isMissingDeviceScope(message: string): boolean {
+/** Scopes required for listing/controlling players (re-login if missing). */
+export function isMissingCriticalDeviceScope(message: string): boolean {
   return (
     message.includes('family:devices:view') ||
-    message.includes('family:device-status:view') ||
     message.includes('family:devices:control')
   )
 }
 
+/** Status HTTP API only; auto-skip uses MQTT and does not require this scope. */
+export function isMissingDeviceStatusScope(message: string): boolean {
+  return message.includes('family:device-status:view')
+}
+
+/** @deprecated use isMissingCriticalDeviceScope */
+export function isMissingDeviceScope(message: string): boolean {
+  return (
+    isMissingCriticalDeviceScope(message) ||
+    isMissingDeviceStatusScope(message)
+  )
+}
+
 export function reauthMessage(message: string): string {
-  if (isMissingDeviceScope(message)) {
+  if (isMissingCriticalDeviceScope(message)) {
     return 'Your Yoto login is missing device permissions. Log out and sign in again to enable auto-skip and player status.'
   }
   return message

@@ -13,7 +13,8 @@
     "stop": "node scripts/stop.mjs",
     "restart": "npm run stop && npm start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "node scripts/patch-yoto-client.mjs"
   },
   "engines": {
     "node": ">=20"
