@@ -5,15 +5,20 @@ import type { AuthTokens } from '../types.js'
 import { generateCodeChallenge, generateCodeVerifier, generateState } from './pkce.js'
 import { formatYotoApiError, reauthMessage } from './permissions.js'
 
+const OPTIONAL_OAUTH_SCOPES = (process.env.YOTO_OPTIONAL_SCOPES ?? '')
+  .split(/[\s,]+/)
+  .map((scope) => scope.trim())
+  .filter(Boolean)
+
 const OAUTH_SCOPES = [
   'openid',
   'profile',
   'offline_access',
   'family:library:view',
   'family:devices:view',
-  'family:device-status:view',
   'family:devices:control',
-  'user:content:manage'
+  'user:content:manage',
+  ...OPTIONAL_OAUTH_SCOPES
 ].join(' ')
 
 interface PkceSession {
@@ -156,10 +161,7 @@ export class YotoAuthService {
     }
 
     try {
-      const { devices } = await client.getDevices()
-      if (devices.length > 0) {
-        await client.getDeviceStatus({ deviceId: devices[0]!.deviceId })
-      }
+      await client.getDevices()
       return { ok: true }
     } catch (error) {
       const message = reauthMessage(formatYotoApiError(error))

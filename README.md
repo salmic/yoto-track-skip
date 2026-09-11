@@ -15,10 +15,11 @@ Auto-skip pre-configured tracks on Yoto cards. Configure skip lists in a local w
 1. [Node.js 20+](https://nodejs.org/)
 2. A [Yoto developer app](https://yoto.dev/) with `YOTO_CLIENT_ID` (and optional `YOTO_CLIENT_SECRET`), enabled for:
    - `family:devices:view`
-   - `family:device-status:view`
    - `family:devices:control`
    - `family:library:view`
    - `user:content:manage`
+
+   Battery and live player status come from MQTT while the monitoring service is running. Yoto may require separate approval for `family:device-status:view`; this app does not request that scope by default because many developer apps are not pre-approved for it. If Yoto approves it for your app, you can add `YOTO_OPTIONAL_SCOPES=family:device-status:view` to `.env`.
 3. Yoto player(s) linked to your Yoto account
 
 ## Setup

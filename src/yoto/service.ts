@@ -200,52 +200,25 @@ export class YotoService {
       return { devices: [], error: message }
     }
 
-    let deviceStatusScopeMissing = false
-
     const devices = await Promise.all(
       Array.from(this.deviceCatalog.values()).map(async (device) => {
         const model = this.account?.getDevice(device.deviceId)
-        let online = device.online
-        let batteryLevel: number | undefined
-        let activeCard: string | undefined
-
-        if (!deviceStatusScopeMissing) {
-          try {
-            const status = await client.getDeviceStatus({ deviceId: device.deviceId })
-            online = status.isOnline || device.online
-            batteryLevel = status.batteryLevelPercentage
-            activeCard = status.activeCard && status.activeCard !== 'none' ? status.activeCard : undefined
-          } catch (error) {
-            const message = formatYotoApiError(error)
-            if (message.includes('family:device-status:view')) {
-              deviceStatusScopeMissing = true
-              this.lastError = reauthMessage(message)
-            } else {
-              console.warn(`[yoto] getDeviceStatus failed for ${device.deviceId}: ${message}`)
-            }
-
-            if (model) {
-              online = online || model.deviceOnline
-              batteryLevel = batteryLevel ?? model.status.batteryLevelPercentage
-              activeCard = activeCard ?? model.status.activeCardId ?? model.playback?.cardId ?? undefined
-            }
-          }
-        } else if (model) {
-          online = online || model.deviceOnline
-          batteryLevel = model.status.batteryLevelPercentage
-          activeCard = model.status.activeCardId ?? model.playback?.cardId ?? undefined
-        }
 
         if (model?.mqttConnected) {
-          void model.requestStatus().catch(() => {})
+          await model.requestStatus().catch(() => {})
         }
+
+        const online = device.online || (model?.deviceOnline ?? false)
+        const batteryLevel = model?.status.batteryLevelPercentage
+        const activeCard =
+          model?.status.activeCardId ?? model?.playback?.cardId ?? undefined
 
         return {
           ...device,
-          online: online || device.online || (model?.deviceOnline ?? false),
+          online,
           mqttConnected: model?.mqttConnected ?? false,
-          batteryLevel: batteryLevel ?? model?.status.batteryLevelPercentage,
-          activeCard: activeCard ?? model?.status.activeCardId ?? model?.playback?.cardId ?? undefined
+          batteryLevel,
+          activeCard
         }
       })
     )
