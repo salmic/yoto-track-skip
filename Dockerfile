@@ -6,6 +6,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY web/package.json web/package-lock.json ./web/
+COPY scripts ./scripts
 
 RUN npm ci && npm ci --prefix web
 
@@ -26,6 +27,7 @@ ENV HOST=0.0.0.0
 ENV DATA_DIR=/data
 
 COPY package.json package-lock.json ./
+COPY scripts ./scripts
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
