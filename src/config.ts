@@ -34,6 +34,8 @@ export const config = {
   yotoClientSecret: process.env.YOTO_CLIENT_SECRET ?? '',
   cardCacheTtlMs: 24 * 60 * 60 * 1000,
   skipDebounceMs: 2000,
+  /** Jump to the next allowed track this many seconds before a skipped track would start. */
+  skipPreemptSeconds: Number(process.env.SKIP_PREEMPT_SECONDS ?? 2),
   maxAutoSkipsPerSession: 20
 }
 

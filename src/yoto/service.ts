@@ -121,6 +121,11 @@ export class YotoService {
           this.skipEngine.resetSession(deviceId, previousCard)
         }
         lastCardByDevice.set(deviceId, playback.cardId)
+        if (cardInserted) {
+          void this.getCardContent(playback.cardId).catch((error) => {
+            console.warn(`[yoto] Failed to prefetch card ${playback.cardId}:`, error)
+          })
+        }
       }
 
       const event: PlaybackEvent = {
@@ -134,7 +139,13 @@ export class YotoService {
         trackTitle: playback.trackTitle ?? undefined,
         playbackStatus: playback.playbackStatus ?? 'stopped',
         source: playback.source ?? undefined,
-        cardInserted
+        cardInserted,
+        positionSec:
+          typeof playback.position === 'number' ? playback.position : undefined,
+        trackLengthSec:
+          typeof playback.trackLength === 'number'
+            ? playback.trackLength
+            : undefined
       }
 
       void this.skipEngine.handlePlayback(event).catch((error) => {
@@ -145,6 +156,7 @@ export class YotoService {
     try {
       await this.account.start()
       await this.refreshDeviceCatalog(client)
+      this.warmSkipProfileCaches()
     } catch (error) {
       this.lastError = reauthMessage(formatYotoApiError(error))
       throw error
@@ -168,6 +180,16 @@ export class YotoService {
 
   private getDeviceName(deviceId: string): string {
     return this.deviceCatalog.get(deviceId)?.name ?? deviceId
+  }
+
+  warmSkipProfileCaches(): void {
+    if (!this.getClient()) return
+    for (const profile of getDb().listProfiles()) {
+      if (!profile.enabled || profile.skipTrackKeys.length === 0) continue
+      void this.getCardContent(profile.cardId).catch((error) => {
+        console.warn(`[yoto] Failed to warm cache for ${profile.cardId}:`, error)
+      })
+    }
   }
 
   async stop(): Promise<void> {

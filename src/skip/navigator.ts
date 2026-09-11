@@ -56,6 +56,25 @@ export function findFirstAllowedTrack(
   return flattenTracks(content).find((track) => !skipTrackKeys.has(track.trackKey)) ?? null
 }
 
+export function getImmediateNextTrack(
+  content: CardContent,
+  currentTrackKey: string
+): TrackLocation | null {
+  const tracks = flattenTracks(content)
+  const currentIndex = tracks.findIndex((track) => track.trackKey === currentTrackKey)
+  if (currentIndex === -1 || currentIndex >= tracks.length - 1) return null
+  return tracks[currentIndex + 1] ?? null
+}
+
+export function findTrackDurationSec(content: CardContent, trackKey: string): number | undefined {
+  for (const chapter of content.chapters) {
+    for (const track of chapter.tracks) {
+      if (track.trackKey === trackKey) return track.durationSec
+    }
+  }
+  return undefined
+}
+
 export function shouldSkipTrack(trackKey: string, skipTrackKeys: Set<string>): boolean {
   return skipTrackKeys.has(trackKey)
 }

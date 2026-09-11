@@ -4,6 +4,7 @@ import {
   findFirstAllowedTrack,
   findNextAllowedTrack,
   flattenTracks,
+  getImmediateNextTrack,
   isPlaybackTrackSkipped,
   resolvePlaybackTrack,
   shouldSkipTrack
@@ -41,6 +42,11 @@ describe('navigator', () => {
     const skip = new Set(['t1', 't2'])
     const first = findFirstAllowedTrack(sampleContent, skip)
     expect(first?.trackKey).toBe('t3')
+  })
+
+  it('returns the next track in card order', () => {
+    const next = getImmediateNextTrack(sampleContent, 't1')
+    expect(next?.trackKey).toBe('t2')
   })
 
   it('finds next allowed track skipping consecutive entries', () => {

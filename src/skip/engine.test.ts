@@ -166,6 +166,63 @@ describe('SkipEngine', () => {
     expect(onSkip).toHaveBeenCalledOnce()
   })
 
+  it('preempts before a skipped track when nearing end of allowed track', async () => {
+    const db = createTestDb()
+    db.upsertProfile({
+      cardId: 'abc123',
+      cardTitle: 'Sample Story',
+      skipTrackKeys: ['t2'],
+      enabled: true
+    })
+
+    const onSkip = vi.fn(async () => {})
+    const engine = new SkipEngine(db, {
+      getCardContent: async () => sampleContent,
+      onSkip
+    })
+
+    await engine.handlePlayback(
+      createEvent({
+        trackKey: 't1',
+        playbackStatus: 'playing',
+        positionSec: 58,
+        trackLengthSec: 60
+      })
+    )
+
+    expect(onSkip).toHaveBeenCalledOnce()
+    expect(onSkip.mock.calls[0]![1]).toMatchObject({
+      skippedTrackKey: 't2',
+      trackKey: 't3',
+      chapterKey: '02'
+    })
+  })
+
+  it('reacts on loading status without waiting for playing', async () => {
+    const db = createTestDb()
+    db.upsertProfile({
+      cardId: 'abc123',
+      cardTitle: 'Sample Story',
+      skipTrackKeys: ['t1'],
+      enabled: true
+    })
+
+    const onSkip = vi.fn(async () => {})
+    const engine = new SkipEngine(db, {
+      getCardContent: async () => sampleContent,
+      onSkip
+    })
+
+    await engine.handlePlayback(
+      createEvent({ trackKey: 't1', playbackStatus: 'loading' })
+    )
+    await engine.handlePlayback(
+      createEvent({ trackKey: 't1', playbackStatus: 'loading' })
+    )
+
+    expect(onSkip).toHaveBeenCalledOnce()
+  })
+
   it('stops playback when all remaining tracks are skipped', async () => {
     const db = createTestDb()
     db.upsertProfile({

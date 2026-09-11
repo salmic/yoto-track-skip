@@ -5,7 +5,9 @@ import type { CardContent, PlaybackEvent } from '../types.js'
 import {
   findFirstAllowedTrack,
   findNextAllowedTrack,
+  findTrackDurationSec,
   flattenTracks,
+  getImmediateNextTrack,
   isPlaybackTrackSkipped,
   resolvePlaybackTrack,
   type TrackLocation
@@ -32,6 +34,7 @@ interface SessionState {
   lastEventAt?: number
   autoSkipCount: number
   pendingSkipTo?: string
+  preemptedFromTrackKey?: string
 }
 
 export class SkipEngine {
@@ -72,20 +75,44 @@ export class SkipEngine {
     if (event.cardInserted && event.source === 'card') {
       const firstTrack = flattenTracks(content)[0]
       const firstAllowed = findFirstAllowedTrack(content, skipSet)
-      if (firstTrack && firstAllowed && skipSet.has(firstTrack.trackKey)) {
+      if (
+        firstTrack &&
+        firstAllowed &&
+        firstTrack.trackKey !== firstAllowed.trackKey
+      ) {
         this.deps.log?.(`Card inserted on ${event.cardId}, skipping leading track(s)`)
         await this.executeSkip(event, content, firstTrack, firstAllowed, skipSet)
         return
       }
     }
 
-    if (!event.trackKey) return
+    if (!event.trackKey && !event.cardInserted) return
 
     const resolvedTrack = this.resolveCurrentTrack(content, event)
     const currentTrackKey = resolvedTrack?.trackKey ?? event.trackKey
 
     const sessionKey = this.sessionKey(event.deviceId, event.cardId)
     const session = this.sessions.get(sessionKey) ?? { autoSkipCount: 0 }
+
+    if (
+      session.preemptedFromTrackKey &&
+      session.preemptedFromTrackKey !== currentTrackKey
+    ) {
+      session.preemptedFromTrackKey = undefined
+    }
+
+    const playbackProbe = {
+      trackKey: resolvedTrack?.trackKey ?? event.trackKey,
+      trackTitle: resolvedTrack?.trackTitle ?? event.trackTitle,
+      chapterKey: resolvedTrack?.chapterKey ?? event.chapterKey
+    }
+
+    const trackIsSkipped = isPlaybackTrackSkipped(content, skipSet, playbackProbe)
+    const trackJustChanged = session.lastTrackKey !== currentTrackKey
+    const urgentSkip =
+      trackIsSkipped &&
+      trackJustChanged &&
+      (event.playbackStatus === 'loading' || event.cardInserted === true)
 
     const now = Date.now()
     if (
@@ -102,6 +129,7 @@ export class SkipEngine {
     }
 
     if (
+      !urgentSkip &&
       session.lastTrackKey === currentTrackKey &&
       session.lastEventAt != null &&
       now - session.lastEventAt < config.skipDebounceMs
@@ -112,13 +140,20 @@ export class SkipEngine {
     session.lastTrackKey = currentTrackKey
     session.lastEventAt = now
 
-    const playbackProbe = {
-      trackKey: resolvedTrack?.trackKey ?? event.trackKey,
-      trackTitle: resolvedTrack?.trackTitle ?? event.trackTitle,
-      chapterKey: resolvedTrack?.chapterKey ?? event.chapterKey
-    }
-
-    if (!isPlaybackTrackSkipped(content, skipSet, playbackProbe)) {
+    if (!trackIsSkipped) {
+      if (
+        event.playbackStatus === 'playing' &&
+        resolvedTrack &&
+        currentTrackKey
+      ) {
+        await this.maybePreemptUpcomingSkip(
+          event,
+          content,
+          resolvedTrack,
+          skipSet,
+          session
+        )
+      }
       this.sessions.set(sessionKey, session)
       return
     }
@@ -195,6 +230,37 @@ export class SkipEngine {
       skippedTrackTitle,
       jumpedToTrackTitle: nextTrack.trackTitle
     })
+  }
+
+  private async maybePreemptUpcomingSkip(
+    event: PlaybackEvent,
+    content: CardContent,
+    currentTrack: TrackLocation,
+    skipSet: Set<string>,
+    session: SessionState
+  ): Promise<void> {
+    if (session.preemptedFromTrackKey === currentTrack.trackKey) return
+
+    const immediateNext = getImmediateNextTrack(content, currentTrack.trackKey)
+    if (!immediateNext || !skipSet.has(immediateNext.trackKey)) return
+
+    const jumpTo = findNextAllowedTrack(content, currentTrack.trackKey, skipSet)
+    if (!jumpTo) return
+
+    const trackLength =
+      event.trackLengthSec ??
+      findTrackDurationSec(content, currentTrack.trackKey)
+    const position = event.positionSec
+    if (trackLength == null || position == null || trackLength <= 0) return
+
+    const remaining = trackLength - position
+    if (remaining > config.skipPreemptSeconds) return
+
+    session.preemptedFromTrackKey = currentTrack.trackKey
+    this.deps.log?.(
+      `Preempting upcoming skipped track on ${event.deviceId} (${remaining.toFixed(1)}s left on ${currentTrack.trackTitle})`
+    )
+    await this.executeSkip(event, content, immediateNext, jumpTo, skipSet, session)
   }
 
   private isActivePlaybackStatus(status: string): boolean {
